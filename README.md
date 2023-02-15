@@ -1,7 +1,7 @@
 # blocking-thread-timeout
 Example on how you can timeout a blocking thread
 
-## Did finnish in time example:
+### Did finnish in time example:
 ```
 $ time ./prog 4
 MAIN: Initializing mutex
@@ -23,7 +23,7 @@ MAIN: Unlocking mutex
 ./prog 4  0.00s user 0.00s system 0% cpu 3.010 total
 ```
 
-## Did not finnish in time example:
+### Did not finnish in time example:
 ```
 $ time ./prog 1
 MAIN: Initializing mutex
