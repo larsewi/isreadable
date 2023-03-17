@@ -2,11 +2,11 @@ CC = gcc
 CFLAGS = -g -Wall
 LDFLAGS = -pthread
 
-.PHONY: all clean run
+.PHONY: all clean
 
-all: prog
+all: isreadable
 
-prog: main.o
+isreadable: main.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 main.o: main.c
@@ -14,8 +14,4 @@ main.o: main.c
 
 clean:
 	rm -f *.o
-	rm -f prog
-
-run: prog 
-	./prog
-
+	rm -f isreadable

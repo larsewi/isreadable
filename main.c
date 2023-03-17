@@ -1,138 +1,137 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <pthread.h>
 #include <unistd.h>
-#include <errno.h>
 
-struct ThreadData {
-    pthread_attr_t attr;
-    pthread_t thread;
-    pthread_cond_t cond;
-    pthread_mutex_t mutex;
-    bool result;
-};
+static pthread_mutex_t MUTEX = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t CONDITION = PTHREAD_COND_INITIALIZER;
 
-static void *ThreadRoutine(void *data) {
-    struct ThreadData *thread_data = data;
+static void *TryRead(void *data) {
+  const char *const filename = data;
 
-    puts("THREAD: Locking mutex");
-    int ret = pthread_mutex_lock(&thread_data->mutex);
-    if (ret != 0) {
-        printf("THREAD: Failed to lock mutex: %s\n", strerror(ret));
-        return NULL;
-    }
+  int ret = pthread_mutex_lock(&MUTEX);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to lock mutex: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
 
-    puts("THREAD: Unlocking mutex");
-    ret = pthread_mutex_unlock(&thread_data->mutex);
-    if (ret != 0) {
-        printf("THREAD: Failed to unlock mutex: %s\n", strerror(ret));
-        return NULL;
-    }
+  ret = pthread_mutex_unlock(&MUTEX);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to unlock mutex: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
 
-    puts("THREAD: Blocking for 3 sec");
-    sleep(3);
-    thread_data->result = true;
+  char buffer;
+  bool success = false;
+  const int fd = open(filename, O_RDONLY);
+  if (fd < 0) {
+    // Failed to open file.
+  } else if (read(fd, &buffer, sizeof(buffer)) < 0) {
+    // Failed to read file.
+    close(fd);
+  } else {
+    // Successfully read file.
+    success = true;
+    close(fd);
+  }
 
-    puts("THREAD: Signalling main thread");
-    ret = pthread_cond_signal(&thread_data->cond);
-    if (ret != 0) {
-        printf("THREAD: Failed to signal main thread: %s\n", strerror(ret));
-        return NULL;
-    }
+  ret = pthread_cond_signal(&CONDITION);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to signal waiting thread: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
 
-    puts("THREAD: Returning from thread routine");
-    return NULL;
+  return (void *)success;
 }
 
-int main(int argc, char **argv) {
-    if (argc <= 1) {
-        puts("Missing argument");
+/**
+ * @brief Determine if a file is readable.
+ * @param[in] filename path to file.
+ * @param[in] timeout milliseconds to wait.
+ * @return true if readable.
+ */
+bool IsReadable(const char *const filename, const long timeout) {
+  // Calculate expiration time.
+  struct timespec ts = {0};
+  if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
+    perror("Failed to get system's real time");
+  }
+  ts.tv_sec += ((timeout * 1000000) + ts.tv_nsec) / 1000000000;
+  ts.tv_nsec = ((timeout * 1000000) + ts.tv_nsec) % 1000000000;
+
+  int ret = pthread_mutex_lock(&MUTEX);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to lock mutex: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  pthread_t thread;
+  ret = pthread_create(&thread, NULL, &TryRead, (void *)filename);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to create thread: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  ret = pthread_cond_timedwait(&CONDITION, &MUTEX, &ts);
+  const bool time_expired = (ret == ETIMEDOUT);
+  if (ret != 0 && !time_expired) {
+    fprintf(stderr, "Failed to wait for condition: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  ret = pthread_cancel(thread);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to cancel thread: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  void *status;
+  ret = pthread_join(thread, &status);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to join thread: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  ret = pthread_mutex_unlock(&MUTEX);
+  if (ret != 0) {
+    fprintf(stderr, "Failed to unlock mutex: %s\n", strerror(ret));
+    exit(EXIT_FAILURE);
+  }
+
+  return !time_expired && (bool)status;
+}
+
+int main(int argc, char *argv[]) {
+  time_t timeout = 10;
+
+  int opt;
+  while ((opt = getopt(argc, argv, "+ht:")) != -1) {
+    switch (opt) {
+    case 'h':
+      printf("%s [-h] [-t TIMEOUT] [FILENAME ...]\n", argv[0]);
+      return EXIT_SUCCESS;
+    case 't':
+      char *endptr;
+      errno = 0;
+      timeout = strtol(optarg, &endptr, 10);
+      if (errno != 0 || endptr == optarg) {
+        fprintf(stderr, "Failed to parse integer '%s'\n", optarg);
         return EXIT_FAILURE;
+      }
+      break;
+    default:
+      return EXIT_FAILURE;
     }
-    const int timeout = atoi(argv[1]);
+  }
 
-    struct ThreadData thread_data;
-    thread_data.result = false;
-
-    puts("MAIN: Initializing mutex");
-    int ret = pthread_mutex_init(&thread_data.mutex, NULL);
-    if (ret != 0) {
-        printf("MAIN: Failed to initialize mutex: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Initializing condition");
-    ret = pthread_cond_init(&thread_data.cond, NULL);
-    if (ret != 0) {
-        printf("MAIN: Failed to initialize condition: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Locking mutex");
-    ret = pthread_mutex_lock(&thread_data.mutex);
-    if (ret != 0) {
-        printf("MAIN: Failed to lock mutex: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Initializing thread attributes");
-    ret = pthread_attr_init(&thread_data.attr);
-    if (ret != 0) {
-        printf("Failed to initialize thread attributes\n");
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Setting thread detach state");
-    ret = pthread_attr_setdetachstate(&thread_data.attr, PTHREAD_CREATE_DETACHED);
-    if (ret != 0) {
-        printf("MAIN: Failed to set thread detach state: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Creating thread");
-    ret = pthread_create(&thread_data.thread, &thread_data.attr, &ThreadRoutine, &thread_data);
-    if (ret != 0) {
-        printf("MAIN: Failed to create thread: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Destroying thread attributes");
-    ret = pthread_attr_destroy(&thread_data.attr);
-    if (ret != 0) {
-        printf("MAIN: Failed to destroy thread attributes: %s\n", strerror(ret));
-        return EXIT_FAILURE;
-    }
-
-    puts("MAIN: Calculating timeout interval");
-    struct timespec ts = {0};
-    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) {
-        printf("MAIN: Failed to get current time: %s\n", strerror(errno));
-        return EXIT_FAILURE;
-    }
-    ts.tv_sec += timeout;
-
-    printf("MAIN: Waiting for thread to finish (timeout: %d sec)\n", timeout);
-    ret = pthread_cond_timedwait(&thread_data.cond, &thread_data.mutex, &ts);
-    switch (ret) {
-        case 0:
-            printf("MAIN: Thread finished in time; computation evaluated to %s\n", (thread_data.result) ? "true" : "false");
-
-            puts("MAIN: Unlocking mutex");
-            ret = pthread_mutex_unlock(&thread_data.mutex);
-            if (ret != 0) {
-                printf("MAIN: Failed to unlock mutex: %s\n", strerror(ret));
-                return EXIT_FAILURE;
-            }
-            return EXIT_SUCCESS;
-
-        case ETIMEDOUT:
-            puts("MAIN: Thread did not finish in time");
-            return EXIT_SUCCESS;
-
-        default:
-            printf("MAIN: Failed to wait for thread to finish: %s", strerror(ret));
-            return EXIT_FAILURE;
-    }
+  for (int i = optind; i < argc; i++) {
+    const char *const filename = argv[i];
+    printf("%s %s readable.\n", filename,
+           (timeout > 0 && IsReadable(filename, timeout)) ? "is" : "not");
+  }
 }
