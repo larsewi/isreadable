@@ -1,43 +1,18 @@
-# blocking-thread-timeout
-Example on how you can timeout a blocking thread
+# isreadable
+A program to check if files are readable while avoiding the possibility of
+blocking forever. It works by spawning a thread for each file trying to read 1
+Byte. A file is concidered readable if the opening of the file is successfull
+and if the reading of 1 Byte is successfull or end-of-file is reached. Files are
+not concidered readable if the opening or reading of a file failes, or if a
+timeout interval (specified in milliseconds) is reached. The timeout interval
+protects you from possibly blocking forever until we sove the halting problem.
 
-### Did finnish in time example:
+## Example
 ```
-$ time ./prog 4
-MAIN: Initializing mutex
-MAIN: Initializing condition
-MAIN: Locking mutex
-MAIN: Initializing thread attributes
-MAIN: Setting thread detach state
-MAIN: Creating thread
-MAIN: Destroying thread attributes
-MAIN: Calculating timeout interval
-MAIN: Waiting for thread to finish (timeout: 4 sec)
-THREAD: Locking mutex
-THREAD: Unlocking mutex
-THREAD: Blocking for 3 sec
-THREAD: Signalling main thread
-THREAD: Returning from thread routine
-MAIN: Thread finished in time; computation evaluated to true
-MAIN: Unlocking mutex
-./prog 4  0.00s user 0.00s system 0% cpu 3.010 total
-```
-
-### Did not finnish in time example:
-```
-$ time ./prog 1
-MAIN: Initializing mutex
-MAIN: Initializing condition
-MAIN: Locking mutex
-MAIN: Initializing thread attributes
-MAIN: Setting thread detach state
-MAIN: Creating thread
-MAIN: Destroying thread attributes
-MAIN: Calculating timeout interval
-MAIN: Waiting for thread to finish (timeout: 1 sec)
-THREAD: Locking mutex
-THREAD: Unlocking mutex
-THREAD: Blocking for 3 sec
-MAIN: Thread did not finish in time
-./prog 1  0.00s user 0.00s system 0% cpu 1.279 total
+$ make                  
+gcc -g -Wall -c main.c -o main.o
+gcc main.o -o isreadable -pthread
+$ ./isreadable -t 100 main.c main.h
+main.c is readable.
+main.h not readable.
 ```

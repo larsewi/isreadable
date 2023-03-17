@@ -110,13 +110,13 @@ int main(int argc, char *argv[]) {
   time_t timeout = 10;
 
   int opt;
+  char *endptr;
   while ((opt = getopt(argc, argv, "+ht:")) != -1) {
     switch (opt) {
     case 'h':
       printf("%s [-h] [-t TIMEOUT] [FILENAME ...]\n", argv[0]);
       return EXIT_SUCCESS;
     case 't':
-      char *endptr;
       errno = 0;
       timeout = strtol(optarg, &endptr, 10);
       if (errno != 0 || endptr == optarg) {
