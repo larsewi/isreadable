@@ -12,8 +12,6 @@ static pthread_mutex_t MUTEX = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t CONDITION = PTHREAD_COND_INITIALIZER;
 
 static void *TryRead(void *data) {
-  const char *const filename = data;
-
   int ret = pthread_mutex_lock(&MUTEX);
   if (ret != 0) {
     fprintf(stderr, "Failed to lock mutex: %s\n", strerror(ret));
@@ -26,12 +24,13 @@ static void *TryRead(void *data) {
     exit(EXIT_FAILURE);
   }
 
-  char buffer;
+  char buffer[1];
   bool success = false;
+  const char *const filename = data;
   const int fd = open(filename, O_RDONLY);
   if (fd < 0) {
     // Failed to open file.
-  } else if (read(fd, &buffer, sizeof(buffer)) < 0) {
+  } else if (read(fd, buffer, sizeof(buffer)) < 0) {
     // Failed to read file.
     close(fd);
   } else {
