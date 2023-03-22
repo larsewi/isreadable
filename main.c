@@ -11,12 +11,23 @@
 static pthread_mutex_t MUTEX = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t CONDITION = PTHREAD_COND_INITIALIZER;
 
+static void CleanupHandler(void *data) {
+  const int fd = *((int *)data);
+  if (fd >= 0) {
+    close(fd);
+  }
+}
+
 static void *TryRead(void *data) {
   int ret = pthread_mutex_lock(&MUTEX);
   if (ret != 0) {
     fprintf(stderr, "Failed to lock mutex: %s\n", strerror(ret));
     exit(EXIT_FAILURE);
   }
+
+  int fd = -1;
+  bool success;
+  pthread_cleanup_push(&CleanupHandler, &fd);
 
   ret = pthread_mutex_unlock(&MUTEX);
   if (ret != 0) {
@@ -25,19 +36,10 @@ static void *TryRead(void *data) {
   }
 
   char buffer[1];
-  bool success = false;
   const char *const filename = data;
-  const int fd = open(filename, O_RDONLY);
-  if (fd < 0) {
-    // Failed to open file.
-  } else if (read(fd, buffer, sizeof(buffer)) < 0) {
-    // Failed to read file.
-    close(fd);
-  } else {
-    // Successfully read file.
-    success = true;
-    close(fd);
-  }
+  fd = open(filename, O_RDONLY);
+  success = ((fd > 0) && (read(fd, buffer, sizeof(buffer)) >= 0));
+  pthread_cleanup_pop(1);
 
   ret = pthread_cond_signal(&CONDITION);
   if (ret != 0) {
