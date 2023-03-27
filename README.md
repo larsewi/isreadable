@@ -10,10 +10,13 @@ problem).
 
 ## Example
 ```
-$ make                  
-gcc -g -Wall -c main.c -o main.o
-gcc main.o -o isreadable -pthread
-$ ./isreadable -t 100 main.c main.h
-main.c is readable.
-main.h not readable.
+% make
+gcc -g -Wall -Wextra -c main.c -o main.o
+gcc -g -Wall -Wextra -Wno-int-to-void-pointer-cast -Wno-void-pointer-to-int-cast -c readable.c -o readable.o
+gcc main.o readable.o -o readable -pthread
+$ ./readable -t100 *.c *.h not-a-file
+File 'main.c' is readable.
+File 'readable.c' is readable.
+File 'readable.h' is readable.
+File 'not-a-file' is not readable.
 ```
