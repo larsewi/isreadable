@@ -18,6 +18,6 @@ enum {
  * @return READABLE_SUCCESS on successful read, READABLE_FAILUIRE on
  *         unsuccessful read, and READABLE_ERROR in case of unexpected error.
  */
-int Readable(const char *const filename, const long timeout);
+int Readable(const char *filename, long timeout);
 
 #endif // _READABLE_H
