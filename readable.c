@@ -1,3 +1,7 @@
+/* Licensed under the MIT License
+ * Copyright (c) 2023 Lars Erik Wik
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>

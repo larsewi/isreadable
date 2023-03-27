@@ -1,3 +1,7 @@
+/* Licensed under the MIT License
+ * Copyright (c) 2023 Lars Erik Wik
+ */
+
 #ifndef _READABLE_H
 #define _READABLE_H
 
