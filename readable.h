@@ -8,7 +8,7 @@
 enum {
   READABLE_SUCCESS = 0, // Successfully read file.
   READABLE_FAILURE,     // Failed to read file.
-  READABLE_ERROR,       // Unexpected error occured.
+  READABLE_ERROR,       // Unexpected error occurred.
 };
 
 /**
